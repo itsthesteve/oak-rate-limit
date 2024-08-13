@@ -1,4 +1,4 @@
-import { Context } from "../../deps.ts";
+import { Context } from "https://deno.land/x/oak@v16.1.0/context.ts";
 import { Store } from "../stores/AbstractStore.ts";
 
 export interface Ratelimit {
@@ -8,9 +8,8 @@ export interface Ratelimit {
 
 export interface RatelimitOptions {
   windowMs: number;
-  max: (
-    ctx: Context,
-  ) => Promise<number> | number;
+  max: (ctx: Context) => Promise<number> | number;
+  withUrl: boolean;
   store: Store;
   headers: boolean;
   message: string;
@@ -19,6 +18,6 @@ export interface RatelimitOptions {
   onRateLimit: (
     ctx: Context,
     next: () => Promise<unknown>,
-    opt: RatelimitOptions,
+    opt: RatelimitOptions
   ) => unknown;
 }

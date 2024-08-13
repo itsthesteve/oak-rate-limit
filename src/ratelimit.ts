@@ -1,38 +1,41 @@
-import { Context, Middleware } from "../deps.ts";
+import { Context, Next } from "https://deno.land/x/oak@v16.1.0/mod.ts";
 import type { RatelimitOptions } from "./types/types.d.ts";
 import { DefaultOptions } from "./utils/defaults.ts";
 
-export const RateLimiter = async (
-  options?: Partial<RatelimitOptions>,
-): Promise<Middleware> => {
+export const RateLimiter = async (options?: Partial<RatelimitOptions>) => {
   const opt = { ...DefaultOptions, ...options };
 
-  await opt.store.init();
+  await opt.store.init(opt.withUrl);
 
   if (typeof opt.onRateLimit !== "function") {
     throw "onRateLimit must be a function.";
   }
+
   if (typeof opt.skip !== "function") throw "skip must be a function.";
 
-  return async (ctx: Context, next) => {
-    const { ip } = ctx.request;
+  return async (ctx: Context, next: Next) => {
+    const { ip, url } = ctx.request;
     const timestamp = Date.now();
+
+    opt.store.setUrlKey(url);
 
     if (await opt.skip(ctx)) return next();
     if (opt.headers) {
       ctx.response.headers.set(
         "X-RateLimit-Limit",
-        await opt.max(ctx).toString(),
+        await opt.max(ctx).toString()
       );
     }
 
-    if (
-      await opt.store.has(ip) &&
-      timestamp - (await opt.store.get(ip)!).lastRequestTimestamp >
-        opt.windowMs
-    ) {
-      opt.store.delete(ip);
+    const exists = await opt.store.has(ip);
+
+    if (exists) {
+      const entry = await opt.store.get(ip);
+      if (exists && timestamp - entry.lastRequestTimestamp > opt.windowMs) {
+        await opt.store.delete(ip);
+      }
     }
+
     if (!opt.store.has(ip)) {
       opt.store.set(ip, {
         remaining: await opt.max(ctx),
@@ -40,19 +43,31 @@ export const RateLimiter = async (
       });
     }
 
-    if (await opt.store.has(ip) && (await opt.store.get(ip)!).remaining === 0) {
+    if (
+      (await opt.store.has(ip)) &&
+      (await opt.store.get(ip)!).remaining <= 0
+    ) {
       await opt.onRateLimit(ctx, next, opt);
     } else {
       await next();
+      // Make sure there's a value to use, or set it
+      const entry = await opt.store.get(ip);
+      if (!entry) {
+        await opt.store.set(ip, {
+          lastRequestTimestamp: Date.now(),
+          remaining: await opt.max(ctx),
+        });
+      }
+
       if (opt.headers) {
         ctx.response.headers.set(
           "X-RateLimit-Remaining",
-          opt.store.get(ip)
+          entry
             ? (await opt.store.get(ip)!).remaining.toString()
-            : await opt.max(ctx).toString(),
+            : await opt.max(ctx).toString()
         );
       }
-      opt.store.set(ip, {
+      await opt.store.set(ip, {
         remaining: (await opt.store.get(ip)!).remaining - 1,
         lastRequestTimestamp: timestamp,
       });
@@ -62,14 +77,17 @@ export const RateLimiter = async (
 
 export const onRateLimit = async (
   ctx: Context,
-  _next: () => Promise<unknown>,
-  opt: RatelimitOptions,
-): Promise<unknown> => {
+  _next: Next,
+  opt: RatelimitOptions
+): Promise<void> => {
   await opt.store.set(ctx.request.ip, {
     remaining: 0,
     lastRequestTimestamp: Date.now(),
   });
   ctx.response.status = opt.statusCode;
-  if (opt.headers) ctx.response.headers.set("X-RateLimit-Remaining", "0");
-  return ctx.response.body = { error: opt.message };
+  if (opt.headers) {
+    ctx.response.headers.set("X-RateLimit-Remaining", "0");
+  }
+  ctx.response.body = { error: opt.message };
+  return;
 };
