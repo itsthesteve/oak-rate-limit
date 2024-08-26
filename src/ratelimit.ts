@@ -1,4 +1,4 @@
-import { Context, Next } from "https://deno.land/x/oak@v16.1.0/mod.ts";
+import type { Context, Next } from "https://deno.land/x/oak@v16.1.0/mod.ts";
 import type { RatelimitOptions } from "./types/types.d.ts";
 import { DefaultOptions } from "./utils/defaults.ts";
 

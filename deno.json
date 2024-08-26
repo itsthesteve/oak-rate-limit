@@ -1,0 +1,5 @@
+{
+  "name": "@its/oak-rate-limit",
+  "version": "1.0.0",
+  "exports": "./mod.ts"
+}
