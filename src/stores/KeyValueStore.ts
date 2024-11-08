@@ -16,7 +16,6 @@ export class KeyValueStore extends Store {
   private withUrl: boolean = false;
   private url: URL | null = null;
 
-  // Default key just has the prefix
   constructor(private readonly store: Deno.Kv) {
     super();
   }

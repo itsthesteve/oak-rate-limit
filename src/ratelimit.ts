@@ -30,8 +30,8 @@ export const RateLimiter = async (options?: Partial<RatelimitOptions>) => {
     const exists = await opt.store.has(ip);
 
     if (exists) {
-      const entry = await opt.store.get(ip);
-      if (exists && timestamp - entry.lastRequestTimestamp > opt.windowMs) {
+      const entry = await opt.store.get(ip)!;
+      if (timestamp - entry.lastRequestTimestamp > opt.windowMs) {
         await opt.store.delete(ip);
       }
     }
